@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POMODORO_SYS // v2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cyan: #00fff2;
+    --magenta: #ff00e5;
+    --yellow: #f9f002;
+    --green: #39ff8f;
+    --bg: #06050c;
+    --panel: rgba(10, 14, 26, 0.78);
+    --grid-line: rgba(0, 255, 242, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--cyan);
+    position: relative;
+  }
+
+  /* perspective neon grid floor */
+  .grid-floor {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 48px 48px;
+    transform: perspective(500px) rotateX(60deg) scale(2);
+    transform-origin: center bottom;
+    top: 40%;
+    height: 80%;
+    animation: gridMove 6s linear infinite;
+    opacity: 0.7;
+  }
+
+  @keyframes gridMove {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 0 48px, 0 0; }
+  }
+
+  body.break .grid-floor {
+    background-image:
+      linear-gradient(rgba(57, 255, 143, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57, 255, 143, 0.12) 1px, transparent 1px);
+  }
+
+  .vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 45%, transparent 30%, var(--bg) 85%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* scanlines + flicker overlay */
+  .scanlines {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 2px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  .scanline-sweep {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, transparent, rgba(0, 255, 242, 0.06), transparent);
+    z-index: 5;
+    pointer-events: none;
+    animation: sweep 5s linear infinite;
+  }
+
+  @keyframes sweep {
+    from { top: -120px; }
+    to { top: 100%; }
+  }
+
+  /* HUD panel */
+  .card {
+    position: relative;
+    z-index: 2;
+    width: 400px;
+    padding: 42px 36px 34px;
+    background: var(--panel);
+    border: 1px solid rgba(0, 255, 242, 0.35);
+    clip-path: polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+    box-shadow:
+      0 0 0 1px rgba(0, 255, 242, 0.08),
+      0 0 30px rgba(0, 255, 242, 0.15),
+      inset 0 0 40px rgba(0, 255, 242, 0.05);
+    backdrop-filter: blur(6px);
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+  }
+
+  body.break .card {
+    border-color: rgba(57, 255, 143, 0.35);
+    box-shadow:
+      0 0 0 1px rgba(57, 255, 143, 0.08),
+      0 0 30px rgba(57, 255, 143, 0.15),
+      inset 0 0 40px rgba(57, 255, 143, 0.05);
+  }
+
+  .corner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--cyan);
+    opacity: 0.9;
+    transition: border-color 0.4s ease;
+  }
+  body.break .corner { border-color: var(--green); }
+  .corner.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .corner.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: rgba(0, 255, 242, 0.55);
+  }
+
+  body.break .header { color: rgba(57, 255, 143, 0.55); }
+
+  .header .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--magenta);
+    margin-right: 6px;
+    box-shadow: 0 0 8px var(--magenta);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  .title-glitch {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 13px;
+    letter-spacing: 4px;
+    text-align: center;
+    color: var(--cyan);
+    text-shadow: 0 0 8px rgba(0, 255, 242, 0.8);
+    margin-bottom: 26px;
+    position: relative;
+  }
+
+  body.break .title-glitch {
+    color: var(--green);
+    text-shadow: 0 0 8px rgba(57, 255, 143, 0.8);
+  }
+
+  /* mode switch - angular tabs */
+  .mode-switch {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 30px;
+    border: 1px solid rgba(0, 255, 242, 0.3);
+    padding: 3px;
+  }
+
+  body.break .mode-switch { border-color: rgba(57, 255, 143, 0.3); }
+
+  .mode-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: rgba(0, 255, 242, 0.5);
+    padding: 9px 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+
+  .mode-btn.active {
+    background: var(--magenta);
+    color: #06050c;
+    box-shadow: 0 0 16px rgba(255, 0, 229, 0.6);
+  }
+
+  body.break .mode-btn {
+    color: rgba(57, 255, 143, 0.5);
+  }
+
+  body.break .mode-btn.active {
+    background: var(--green);
+    color: #06050c;
+    box-shadow: 0 0 16px rgba(57, 255, 143, 0.6);
+  }
+
+  /* timer ring */
+  .timer-ring {
+    position: relative;
+    width: 250px;
+    height: 250px;
+    margin: 0 auto 28px;
+  }
+
+  .timer-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    filter: drop-shadow(0 0 12px rgba(255, 0, 229, 0.55));
+  }
+
+  body.break .timer-ring svg {
+    filter: drop-shadow(0 0 12px rgba(57, 255, 143, 0.55));
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: rgba(0, 255, 242, 0.08);
+    stroke-width: 3;
+  }
+
+  .ring-tick {
+    fill: none;
+    stroke: rgba(0, 255, 242, 0.18);
+    stroke-width: 1;
+    stroke-dasharray: 1 7.5;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: url(#ringGradient);
+    stroke-width: 5;
+    stroke-linecap: square;
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .timer-display {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .time {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 50px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    text-shadow: 0 0 6px var(--cyan), 0 0 22px rgba(0, 255, 242, 0.5);
+  }
+
+  body.break .time {
+    color: var(--green);
+    text-shadow: 0 0 6px var(--green), 0 0 22px rgba(57, 255, 143, 0.5);
+  }
+
+  .label {
+    margin-top: 8px;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--magenta);
+    text-shadow: 0 0 6px rgba(255, 0, 229, 0.7);
+  }
+
+  body.break .label {
+    color: var(--green);
+    text-shadow: 0 0 6px rgba(57, 255, 143, 0.7);
+  }
+
+  /* data-stream progress bar */
+  .progress-bar-track {
+    position: relative;
+    width: 100%;
+    height: 12px;
+    background: rgba(0, 255, 242, 0.06);
+    border: 1px solid rgba(0, 255, 242, 0.25);
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+
+  body.break .progress-bar-track { border-color: rgba(57, 255, 143, 0.25); }
+
+  .progress-bar-fill {
+    position: relative;
+    height: 100%;
+    width: 0%;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--magenta) 0px,
+      var(--magenta) 8px,
+      rgba(255, 0, 229, 0.4) 8px,
+      rgba(255, 0, 229, 0.4) 10px
+    );
+    box-shadow: 0 0 14px rgba(255, 0, 229, 0.8);
+    transition: width 1s linear, background 0.4s ease;
+  }
+
+  body.break .progress-bar-fill {
+    background: repeating-linear-gradient(
+      90deg,
+      var(--green) 0px,
+      var(--green) 8px,
+      rgba(57, 255, 143, 0.4) 8px,
+      rgba(57, 255, 143, 0.4) 10px
+    );
+    box-shadow: 0 0 14px rgba(57, 255, 143, 0.8);
+  }
+
+  /* controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    position: relative;
+    flex: 1;
+    border: 1px solid var(--cyan);
+    background: transparent;
+    color: var(--cyan);
+    padding: 13px 18px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    transition: all 0.2s ease;
+    overflow: hidden;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--cyan);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease;
+    z-index: -1;
+  }
+
+  .btn:hover::before {
+    transform: scaleX(1);
+  }
+
+  .btn:hover {
+    color: #06050c;
+  }
+
+  .btn:active {
+    transform: scale(0.96);
+  }
+
+  .btn-primary {
+    flex: 1.5;
+    border-color: var(--magenta);
+    color: var(--magenta);
+    box-shadow: 0 0 14px rgba(255, 0, 229, 0.35);
+  }
+
+  .btn-primary::before { background: var(--magenta); }
+
+  body.break .btn {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  body.break .btn::before { background: var(--green); }
+
+  body.break .btn-primary {
+    box-shadow: 0 0 14px rgba(57, 255, 143, 0.35);
+  }
+
+  .session-count {
+    margin-top: 24px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-align: center;
+    color: rgba(0, 255, 242, 0.5);
+  }
+
+  body.break .session-count { color: rgba(57, 255, 143, 0.5); }
+
+  .session-count span {
+    color: var(--yellow);
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(249, 240, 2, 0.8);
+  }
+
+  /* layout wrapper holding both widgets */
+  .layout {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
+    padding: 24px;
+  }
+
+  /* ---- D-Day calculator (pastel card) ---- */
+  .dday-card {
+    position: relative;
+    width: 360px;
+    padding: 38px 30px 32px;
+    background: linear-gradient(160deg, #ffe2ef 0%, #e6e6ff 55%, #dffaf0 100%);
+    border-radius: 28px;
+    box-shadow:
+      0 12px 36px rgba(40, 30, 70, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    text-align: center;
+    font-family: 'Gowun Dodum', sans-serif;
+    color: #545471;
+  }
+
+  .dday-title {
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #5b5b85;
+    margin-bottom: 6px;
+  }
+
+  .dday-sub {
+    font-size: 12.5px;
+    color: #8484a3;
+    margin-bottom: 24px;
+  }
+
+  .dday-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 26px;
+  }
+
+  .dday-input {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    background: #ffffff;
+    font-family: inherit;
+    font-size: 14px;
+    color: #555570;
+    outline: none;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.06);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .dday-input:focus {
+    border-color: #b9a8ff;
+    box-shadow: 0 0 0 3px rgba(185, 168, 255, 0.25);
+  }
+
+  .dday-btn {
+    border: none;
+    border-radius: 14px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #ffaed6, #aebcff);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(170, 150, 255, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .dday-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 20px rgba(170, 150, 255, 0.55);
+  }
+
+  .dday-btn:active {
+    transform: scale(0.96);
+  }
+
+  .dday-result-box {
+    border-radius: 20px;
+    padding: 28px 16px 24px;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow:
+      inset 0 2px 10px rgba(255, 255, 255, 0.7),
+      0 4px 14px rgba(80, 60, 120, 0.08);
+  }
+
+  .dday-result {
+    font-size: 58px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1px;
+    color: #8b7cf6;
+    background: linear-gradient(135deg, #ff8fc7, #8b9bff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .dday-result-sub {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: #8c8caa;
+  }
+
+  @media (max-width: 420px) {
+    .dday-card { width: 90vw; }
+  }
+</style>
+</head>
+<body>
+  <div class="grid-floor"></div>
+  <div class="vignette"></div>
+  <div class="scanlines"></div>
+  <div class="scanline-sweep"></div>
+
+  <div class="layout">
+  <div class="card">
+    <div class="corner tl"></div>
+    <div class="corner br"></div>
+
+    <div class="header">
+      <span><span class="dot"></span>SYS.ONLINE</span>
+      <span id="modeTag">MODE: FOCUS</span>
+    </div>
+
+    <div class="title-glitch">// POMODORO_TIMER</div>
+
+    <div class="mode-switch">
+      <button class="mode-btn active" data-mode="focus">FOCUS_25</button>
+      <button class="mode-btn" data-mode="break">BREAK_05</button>
+    </div>
+
+    <div class="timer-ring">
+      <svg viewBox="0 0 260 260">
+        <defs>
+          <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop id="gradStop1" offset="0%" stop-color="#ff00e5"/>
+            <stop id="gradStop2" offset="100%" stop-color="#00fff2"/>
+          </linearGradient>
+        </defs>
+        <circle class="ring-bg" cx="130" cy="130" r="118"></circle>
+        <circle class="ring-tick" cx="130" cy="130" r="105"></circle>
+        <circle class="ring-progress" id="ringProgress" cx="130" cy="130" r="115"></circle>
+      </svg>
+      <div class="timer-display">
+        <div class="time" id="timeDisplay">25:00</div>
+        <div class="label" id="statusLabel">FOCUS MODE</div>
+      </div>
+    </div>
+
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="startBtn">START</button>
+      <button class="btn" id="resetBtn">RESET</button>
+    </div>
+
+    <div class="session-count">SESSIONS_COMPLETE :: <span id="sessionCount">00</span></div>
+  </div>
+
+  <div class="dday-card">
+    <div class="dday-title">🎯 디데이 계산기</div>
+    <div class="dday-sub">목표 날짜를 선택하면 디데이를 계산해드려요</div>
+    <div class="dday-input-row">
+      <input type="date" id="targetDate" class="dday-input">
+      <button id="ddayCalcBtn" class="dday-btn">계산하기</button>
+    </div>
+    <div class="dday-result-box">
+      <div class="dday-result" id="ddayResult">D-DAY</div>
+      <div class="dday-result-sub" id="ddayResultSub">날짜를 선택해주세요</div>
+    </div>
+  </div>
+  </div>
+
+<script>
+  const FOCUS_TIME = 25 * 60;
+  const BREAK_TIME = 5 * 60;
+
+  const timeDisplay = document.getElementById('timeDisplay');
+  const statusLabel = document.getElementById('statusLabel');
+  const progressBar = document.getElementById('progressBar');
+  const ringProgress = document.getElementById('ringProgress');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const sessionCountEl = document.getElementById('sessionCount');
+  const modeBtns = document.querySelectorAll('.mode-btn');
+  const modeTag = document.getElementById('modeTag');
+  const gradStop1 = document.getElementById('gradStop1');
+  const gradStop2 = document.getElementById('gradStop2');
+
+  const RADIUS = 115;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  ringProgress.style.strokeDasharray = CIRCUMFERENCE;
+
+  let mode = 'focus';
+  let totalTime = FOCUS_TIME;
+  let remaining = FOCUS_TIME;
+  let isRunning = false;
+  let intervalId = null;
+  let sessionCount = 0;
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function updateDisplay() {
+    timeDisplay.textContent = formatTime(remaining);
+    const progressRatio = (totalTime - remaining) / totalTime;
+    progressBar.style.width = `${progressRatio * 100}%`;
+    const offset = CIRCUMFERENCE * (1 - progressRatio);
+    ringProgress.style.strokeDashoffset = offset;
+  }
+
+  function setMode(newMode, resetTimer = true) {
+    mode = newMode;
+    document.body.classList.toggle('break', mode === 'break');
+    modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+    statusLabel.textContent = mode === 'focus' ? 'FOCUS MODE' : 'BREAK MODE';
+    modeTag.textContent = mode === 'focus' ? 'MODE: FOCUS' : 'MODE: BREAK';
+
+    if (mode === 'focus') {
+      gradStop1.setAttribute('stop-color', '#ff00e5');
+      gradStop2.setAttribute('stop-color', '#00fff2');
+    } else {
+      gradStop1.setAttribute('stop-color', '#39ff8f');
+      gradStop2.setAttribute('stop-color', '#00fff2');
+    }
+
+    if (resetTimer) {
+      pauseTimer();
+      totalTime = mode === 'focus' ? FOCUS_TIME : BREAK_TIME;
+      remaining = totalTime;
+      updateDisplay();
+    }
+  }
+
+  function tick() {
+    remaining -= 1;
+    if (remaining <= 0) {
+      remaining = 0;
+      updateDisplay();
+      pauseTimer();
+
+      if (mode === 'focus') {
+        sessionCount += 1;
+        sessionCountEl.textContent = sessionCount.toString().padStart(2, '0');
+        setMode('break');
+      } else {
+        setMode('focus');
+      }
+      return;
+    }
+    updateDisplay();
+  }
+
+  function startTimer() {
+    isRunning = true;
+    startBtn.textContent = 'PAUSE';
+    intervalId = setInterval(tick, 1000);
+  }
+
+  function pauseTimer() {
+    isRunning = false;
+    startBtn.textContent = 'START';
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  function toggleTimer() {
+    if (isRunning) {
+      pauseTimer();
+    } else {
+      startTimer();
+    }
+  }
+
+  function resetTimer() {
+    pauseTimer();
+    totalTime = mode === 'focus' ? FOCUS_TIME : BREAK_TIME;
+    remaining = totalTime;
+    updateDisplay();
+  }
+
+  startBtn.addEventListener('click', toggleTimer);
+  resetBtn.addEventListener('click', resetTimer);
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.mode !== mode) {
+        setMode(btn.dataset.mode);
+      }
+    });
+  });
+
+  updateDisplay();
+</script>
+
+<script>
+  const targetDateInput = document.getElementById('targetDate');
+  const ddayCalcBtn = document.getElementById('ddayCalcBtn');
+  const ddayResult = document.getElementById('ddayResult');
+  const ddayResultSub = document.getElementById('ddayResultSub');
+
+  function calculateDday() {
+    const value = targetDateInput.value;
+    if (!value) {
+      ddayResult.textContent = 'D-DAY';
+      ddayResultSub.textContent = '날짜를 선택해주세요';
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [year, month, day] = value.split('-').map(Number);
+    const target = new Date(year, month - 1, day);
+    target.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((target - today) / 86400000);
+
+    if (diffDays > 0) {
+      ddayResult.textContent = `D-${diffDays}`;
+    } else if (diffDays === 0) {
+      ddayResult.textContent = 'D-DAY';
+    } else {
+      ddayResult.textContent = `D+${Math.abs(diffDays)}`;
+    }
+
+    const formatted = target.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    ddayResultSub.textContent = diffDays >= 0
+      ? `${formatted}까지 남은 날짜`
+      : `${formatted}로부터 지난 날짜`;
+  }
+
+  ddayCalcBtn.addEventListener('click', calculateDday);
+  targetDateInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') calculateDday();
+  });
+</script>
+</body>
+</html>
